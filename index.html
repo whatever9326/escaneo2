@@ -6,7 +6,7 @@
   <title>Escaneo de Pedidos - Demo</title>
   <style>
     body { font-family: sans-serif; padding: 2rem; }
-    input[type="file"], input[type="text"] { margin: 1rem 0; }
+    input[type="file"], input[type="text"], select { margin: 1rem 0; }
     button { margin-top: 1rem; padding: 0.5rem 1rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: 8px; }
@@ -20,13 +20,17 @@
   <h1>Escaneo de Productos</h1>
   <input type="file" id="csvFile" accept=".csv">
   <br>
+  <label for="pedidoSelect">Selecciona un pedido:</label>
+  <select id="pedidoSelect"></select>
+  <br>
   <input type="text" id="barcodeInput" placeholder="Escanea código de barras" autofocus>
   <button onclick="exportarResumen()">Exportar resumen</button>
   <div id="errores" class="error"></div>
   <table id="pedidoTable"></table>
 
   <script>
-    let pedido = {};
+    let pedidos = {}; // { pedido_id: { codigo_barras: { nombre, cantidad, escaneado } } }
+    let pedidoActual = null;
     let errores = [];
 
     document.getElementById('csvFile').addEventListener('change', function (e) {
@@ -36,9 +40,8 @@
       const reader = new FileReader();
       reader.onload = function (e) {
         const lines = e.target.result.split('\n');
-        pedido = {};
+        pedidos = {};
         errores = [];
-        const codigos = new Set();
 
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(',');
@@ -53,43 +56,63 @@
             continue;
           }
 
-          if (codigos.has(code)) {
-            errores.push(`Línea ${i + 1}: código duplicado (${code}).`);
-            continue;
-          }
-
           if (isNaN(parseInt(qty))) {
             errores.push(`Línea ${i + 1}: cantidad inválida (${qty}).`);
             continue;
           }
 
-          codigos.add(code);
-          pedido[code] = {
+          if (!pedidos[id]) pedidos[id] = {};
+          if (pedidos[id][code]) {
+            errores.push(`Línea ${i + 1}: código duplicado (${code}) en pedido ${id}.`);
+            continue;
+          }
+
+          pedidos[id][code] = {
             nombre: name,
             cantidad: parseInt(qty),
             escaneado: 0
           };
         }
 
+        actualizarSelectorPedidos();
         renderErrores();
-        renderTabla();
       };
       reader.readAsText(file);
     });
 
+    function actualizarSelectorPedidos() {
+      const selector = document.getElementById('pedidoSelect');
+      selector.innerHTML = '<option value="">-- Selecciona --</option>';
+      for (const id in pedidos) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `Pedido ${id}`;
+        selector.appendChild(option);
+      }
+      selector.addEventListener('change', function () {
+        pedidoActual = pedidos[this.value] || null;
+        renderTabla();
+      });
+    }
+
     document.getElementById('barcodeInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
+        if (!pedidoActual) {
+          alert('❗ Debes seleccionar un pedido primero');
+          return;
+        }
+
         const code = e.target.value.trim();
         if (!code) return;
 
-        if (pedido[code]) {
-          if (pedido[code].escaneado < pedido[code].cantidad) {
-            pedido[code].escaneado++;
+        if (pedidoActual[code]) {
+          if (pedidoActual[code].escaneado < pedidoActual[code].cantidad) {
+            pedidoActual[code].escaneado++;
           } else {
             alert('❌ Ya escaneaste todos los de este producto');
           }
         } else {
-          alert('❌ Producto no está en el pedido');
+          alert('❌ Producto no está en el pedido seleccionado');
         }
 
         e.target.value = '';
@@ -100,8 +123,10 @@
     function renderTabla() {
       const table = document.getElementById('pedidoTable');
       table.innerHTML = '<tr><th>Código</th><th>Nombre</th><th>Cantidad</th><th>Escaneado</th></tr>';
-      for (const code in pedido) {
-        const p = pedido[code];
+      if (!pedidoActual) return;
+
+      for (const code in pedidoActual) {
+        const p = pedidoActual[code];
         const row = document.createElement('tr');
         if (p.escaneado === p.cantidad) row.classList.add('completo');
         if (p.escaneado > p.cantidad) row.classList.add('exceso');
@@ -125,9 +150,14 @@
     }
 
     function exportarResumen() {
+      if (!pedidoActual) {
+        alert('Selecciona un pedido para exportar el resumen.');
+        return;
+      }
+
       let csv = 'codigo_barras,nombre_producto,cantidad,escaneado\n';
-      for (const code in pedido) {
-        const p = pedido[code];
+      for (const code in pedidoActual) {
+        const p = pedidoActual[code];
         csv += `${code},${p.nombre},${p.cantidad},${p.escaneado}\n`;
       }
 
