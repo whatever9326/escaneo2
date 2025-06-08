@@ -6,7 +6,7 @@
   <title>Escaneo de Pedidos - Demo</title>
   <style>
     body { font-family: sans-serif; padding: 2rem; }
-    input[type="file"], input[type="text"], select { margin: 1rem 0; }
+    input[type="file"], input[type="text"], input[type="url"], select { margin: 1rem 0; }
     button { margin-top: 1rem; padding: 0.5rem 1rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: 8px; }
@@ -18,8 +18,12 @@
 </head>
 <body>
   <h1>Escaneo de Productos</h1>
-  <input type="file" id="csvFile" accept=".csv">
+
+  <label for="sheetUrl">Cargar desde Google Sheets:</label>
+  <input type="url" id="sheetUrl" placeholder="Pega aquí la URL pública de Google Sheets">
+  <button onclick="cargarDesdeSheet()">Cargar</button>
   <br>
+
   <label for="pedidoSelect">Selecciona un pedido:</label>
   <select id="pedidoSelect"></select>
   <br>
@@ -29,56 +33,69 @@
   <table id="pedidoTable"></table>
 
   <script>
-    let pedidos = {}; // { pedido_id: { codigo_barras: { nombre, cantidad, escaneado } } }
+    let pedidos = {};
     let pedidoActual = null;
     let errores = [];
 
-    document.getElementById('csvFile').addEventListener('change', function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
+    function cargarDesdeSheet() {
+      const url = document.getElementById('sheetUrl').value;
+      const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (!match) {
+        alert('❌ URL inválida de Google Sheets.');
+        return;
+      }
 
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const lines = e.target.result.split('\n');
-        pedidos = {};
-        errores = [];
+      const sheetId = match[1];
+      const sheetURL = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',');
-          if (cols.length < 4) {
-            errores.push(`Línea ${i + 1}: columnas incompletas.`);
-            continue;
-          }
+      fetch(sheetURL)
+        .then(res => res.text())
+        .then(data => procesarCSV(data))
+        .catch(err => {
+          console.error(err);
+          alert('❌ No se pudo cargar la hoja. Asegúrate de que sea pública.');
+        });
+    }
 
-          const [id, code, name, qty] = cols.map(c => c.trim());
-          if (!id || !code || !name || !qty) {
-            errores.push(`Línea ${i + 1}: datos faltantes.`);
-            continue;
-          }
+    function procesarCSV(csvText) {
+      const lines = csvText.trim().split('\n');
+      pedidos = {};
+      errores = [];
 
-          if (isNaN(parseInt(qty))) {
-            errores.push(`Línea ${i + 1}: cantidad inválida (${qty}).`);
-            continue;
-          }
-
-          if (!pedidos[id]) pedidos[id] = {};
-          if (pedidos[id][code]) {
-            errores.push(`Línea ${i + 1}: código duplicado (${code}) en pedido ${id}.`);
-            continue;
-          }
-
-          pedidos[id][code] = {
-            nombre: name,
-            cantidad: parseInt(qty),
-            escaneado: 0
-          };
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        if (cols.length < 4) {
+          errores.push(`Línea ${i + 1}: columnas incompletas.`);
+          continue;
         }
 
-        actualizarSelectorPedidos();
-        renderErrores();
-      };
-      reader.readAsText(file);
-    });
+        const [id, code, name, qty] = cols.map(c => c.trim());
+        if (!id || !code || !name || !qty) {
+          errores.push(`Línea ${i + 1}: datos faltantes.`);
+          continue;
+        }
+
+        if (isNaN(parseInt(qty))) {
+          errores.push(`Línea ${i + 1}: cantidad inválida (${qty}).`);
+          continue;
+        }
+
+        if (!pedidos[id]) pedidos[id] = {};
+        if (pedidos[id][code]) {
+          errores.push(`Línea ${i + 1}: código duplicado (${code}) en pedido ${id}.`);
+          continue;
+        }
+
+        pedidos[id][code] = {
+          nombre: name,
+          cantidad: parseInt(qty),
+          escaneado: 0
+        };
+      }
+
+      actualizarSelectorPedidos();
+      renderErrores();
+    }
 
     function actualizarSelectorPedidos() {
       const selector = document.getElementById('pedidoSelect');
@@ -146,7 +163,7 @@
         div.textContent = '';
         return;
       }
-      div.innerHTML = '<strong>Errores en el archivo CSV:</strong><ul>' + errores.map(e => `<li>${e}</li>`).join('') + '</ul>';
+      div.innerHTML = '<strong>Errores en el archivo:</strong><ul>' + errores.map(e => `<li>${e}</li>`).join('') + '</ul>';
     }
 
     function exportarResumen() {
