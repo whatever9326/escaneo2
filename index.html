@@ -13,6 +13,7 @@
     th { background: #f2f2f2; }
     .completo { background: #c8e6c9; }
     .exceso { background: #ffcdd2; }
+    .error { color: red; margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -21,10 +22,12 @@
   <br>
   <input type="text" id="barcodeInput" placeholder="Escanea código de barras" autofocus>
   <button onclick="exportarResumen()">Exportar resumen</button>
+  <div id="errores" class="error"></div>
   <table id="pedidoTable"></table>
 
   <script>
-    let pedido = {}; // { codigo_barras: { nombre, cantidad, escaneado } }
+    let pedido = {};
+    let errores = [];
 
     document.getElementById('csvFile').addEventListener('change', function (e) {
       const file = e.target.files[0];
@@ -34,16 +37,41 @@
       reader.onload = function (e) {
         const lines = e.target.result.split('\n');
         pedido = {};
+        errores = [];
+        const codigos = new Set();
+
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(',');
-          if (cols.length < 4) continue;
-          const [id, code, name, qty] = cols;
+          if (cols.length < 4) {
+            errores.push(`Línea ${i + 1}: columnas incompletas.`);
+            continue;
+          }
+
+          const [id, code, name, qty] = cols.map(c => c.trim());
+          if (!id || !code || !name || !qty) {
+            errores.push(`Línea ${i + 1}: datos faltantes.`);
+            continue;
+          }
+
+          if (codigos.has(code)) {
+            errores.push(`Línea ${i + 1}: código duplicado (${code}).`);
+            continue;
+          }
+
+          if (isNaN(parseInt(qty))) {
+            errores.push(`Línea ${i + 1}: cantidad inválida (${qty}).`);
+            continue;
+          }
+
+          codigos.add(code);
           pedido[code] = {
             nombre: name,
             cantidad: parseInt(qty),
             escaneado: 0
           };
         }
+
+        renderErrores();
         renderTabla();
       };
       reader.readAsText(file);
@@ -85,6 +113,15 @@
         `;
         table.appendChild(row);
       }
+    }
+
+    function renderErrores() {
+      const div = document.getElementById('errores');
+      if (errores.length === 0) {
+        div.textContent = '';
+        return;
+      }
+      div.innerHTML = '<strong>Errores en el archivo CSV:</strong><ul>' + errores.map(e => `<li>${e}</li>`).join('') + '</ul>';
     }
 
     function exportarResumen() {
