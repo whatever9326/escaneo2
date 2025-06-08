@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escaneo de Pedidos - Demo</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    input[type="file"], input[type="text"] { margin: 1rem 0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f2f2f2; }
+    .completo { background: #c8e6c9; }
+    .exceso { background: #ffcdd2; }
+  </style>
+</head>
+<body>
+  <h1>Escaneo de Productos</h1>
+  <input type="file" id="csvFile" accept=".csv">
+  <br>
+  <input type="text" id="barcodeInput" placeholder="Escanea código de barras" autofocus>
+  <table id="pedidoTable"></table>
+
+  <script>
+    let pedido = {}; // { codigo_barras: { nombre, cantidad, escaneado } }
+
+    document.getElementById('csvFile').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const lines = e.target.result.split('\n');
+        pedido = {};
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',');
+          if (cols.length < 4) continue;
+          const [id, code, name, qty] = cols;
+          pedido[code] = {
+            nombre: name,
+            cantidad: parseInt(qty),
+            escaneado: 0
+          };
+        }
+        renderTabla();
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('barcodeInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        const code = e.target.value.trim();
+        if (!code) return;
+
+        if (pedido[code]) {
+          if (pedido[code].escaneado < pedido[code].cantidad) {
+            pedido[code].escaneado++;
+          } else {
+            alert('❌ Ya escaneaste todos los de este producto');
+          }
+        } else {
+          alert('❌ Producto no está en el pedido');
+        }
+
+        e.target.value = '';
+        renderTabla();
+      }
+    });
+
+    function renderTabla() {
+      const table = document.getElementById('pedidoTable');
+      table.innerHTML = '<tr><th>Código</th><th>Nombre</th><th>Cantidad</th><th>Escaneado</th></tr>';
+      for (const code in pedido) {
+        const p = pedido[code];
+        const row = document.createElement('tr');
+        if (p.escaneado === p.cantidad) row.classList.add('completo');
+        if (p.escaneado > p.cantidad) row.classList.add('exceso');
+        row.innerHTML = `
+          <td>${code}</td>
+          <td>${p.nombre}</td>
+          <td>${p.cantidad}</td>
+          <td>${p.escaneado}</td>
+        `;
+        table.appendChild(row);
+      }
+    }
+  </script>
+</body>
+</html>
