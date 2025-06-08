@@ -57,6 +57,10 @@
         });
     }
 
+    function limpiarComillas(texto) {
+      return texto.replace(/^"|"$/g, '');
+    }
+
     function procesarCSV(csvText) {
       const lines = csvText.trim().split('\n');
       pedidos = {};
@@ -69,14 +73,20 @@
           continue;
         }
 
-        const [id, code, name, qty] = cols.map(c => c.trim());
-        if (!id || !code || !name || !qty) {
+        const [idRaw, codeRaw, nameRaw, qtyRaw] = cols;
+        const id = limpiarComillas(idRaw.trim());
+        const code = limpiarComillas(codeRaw.trim());
+        const name = limpiarComillas(nameRaw.trim());
+        const qtyText = limpiarComillas(qtyRaw.trim());
+
+        if (!id || !code || !name || !qtyText) {
           errores.push(`Línea ${i + 1}: datos faltantes.`);
           continue;
         }
 
-        if (isNaN(parseInt(qty))) {
-          errores.push(`Línea ${i + 1}: cantidad inválida (${qty}).`);
+        const qty = parseInt(qtyText);
+        if (isNaN(qty)) {
+          errores.push(`Línea ${i + 1}: cantidad inválida ("${qtyText}").`);
           continue;
         }
 
@@ -88,7 +98,7 @@
 
         pedidos[id][code] = {
           nombre: name,
-          cantidad: parseInt(qty),
+          cantidad: qty,
           escaneado: 0
         };
       }
