@@ -7,6 +7,7 @@
   <style>
     body { font-family: sans-serif; padding: 2rem; }
     input[type="file"], input[type="text"] { margin: 1rem 0; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: 8px; }
     th { background: #f2f2f2; }
@@ -19,6 +20,7 @@
   <input type="file" id="csvFile" accept=".csv">
   <br>
   <input type="text" id="barcodeInput" placeholder="Escanea código de barras" autofocus>
+  <button onclick="exportarResumen()">Exportar resumen</button>
   <table id="pedidoTable"></table>
 
   <script>
@@ -83,6 +85,22 @@
         `;
         table.appendChild(row);
       }
+    }
+
+    function exportarResumen() {
+      let csv = 'codigo_barras,nombre_producto,cantidad,escaneado\n';
+      for (const code in pedido) {
+        const p = pedido[code];
+        csv += `${code},${p.nombre},${p.cantidad},${p.escaneado}\n`;
+      }
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.setAttribute('href', URL.createObjectURL(blob));
+      link.setAttribute('download', 'resumen_escaneo.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   </script>
 </body>
