@@ -29,8 +29,12 @@
   <br>
   <input type="text" id="barcodeInput" placeholder="Escanea código de barras" autofocus>
   <button onclick="exportarResumen()">Exportar resumen</button>
+  <button onclick="guardarHistorial()">Guardar historial</button>
+  <button onclick="verHistorial()">Ver historial</button>
+
   <div id="errores" class="error"></div>
   <table id="pedidoTable"></table>
+  <div id="historial"></div>
 
   <script>
     let pedidos = {};
@@ -195,6 +199,31 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    function guardarHistorial() {
+      if (!pedidoActual) {
+        alert('Selecciona un pedido para guardar su historial.');
+        return;
+      }
+      const id = document.getElementById('pedidoSelect').value;
+      localStorage.setItem('historial_' + id, JSON.stringify(pedidoActual));
+      alert('✅ Historial guardado para el pedido ' + id);
+    }
+
+    function verHistorial() {
+      const contenedor = document.getElementById('historial');
+      contenedor.innerHTML = '<h3>Historial guardado</h3>';
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('historial_')) {
+          const id = key.replace('historial_', '');
+          const data = JSON.parse(localStorage.getItem(key));
+          contenedor.innerHTML += `<strong>Pedido ${id}</strong><ul>` +
+            Object.entries(data).map(([code, p]) =>
+              `<li>${code}: ${p.nombre} → ${p.escaneado}/${p.cantidad}</li>`).join('') + '</ul>';
+        }
+      }
     }
   </script>
 </body>
