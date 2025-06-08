@@ -72,7 +72,100 @@
       setTimeout(() => mensajeTemporal.style.display = 'none', 2500);
     }
 
-    // El resto del script queda igual excepto alert() -> mostrarMensaje()
+    function cargarDesdeSheet() {
+      const url = document.getElementById('sheetUrl').value;
+      const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (!match) {
+        mostrarMensaje('❌ URL inválida de Google Sheets.');
+        return;
+      }
+
+      const sheetId = match[1];
+      const sheetURL = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+
+      fetch(sheetURL)
+        .then(res => res.text())
+        .then(data => procesarCSV(data))
+        .catch(err => {
+          console.error(err);
+          mostrarMensaje('❌ No se pudo cargar la hoja. Asegúrate de que sea pública.');
+        });
+    }
+
+    function limpiarComillas(texto) {
+      return texto.replace(/^"|"$/g, '');
+    }
+
+    function procesarCSV(csvText) {
+      const lines = csvText.trim().split('\n');
+      pedidos = {};
+      errores = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        if (cols.length < 4) {
+          errores.push(`Línea ${i + 1}: columnas incompletas.`);
+          continue;
+        }
+
+        const [idRaw, codeRaw, nameRaw, qtyRaw] = cols;
+        const id = limpiarComillas(idRaw.trim());
+        const code = limpiarComillas(codeRaw.trim());
+        const name = limpiarComillas(nameRaw.trim());
+        const qtyText = limpiarComillas(qtyRaw.trim());
+
+        if (!id || !code || !name || !qtyText) {
+          errores.push(`Línea ${i + 1}: datos faltantes.`);
+          continue;
+        }
+
+        const qty = parseInt(qtyText);
+        if (isNaN(qty)) {
+          errores.push(`Línea ${i + 1}: cantidad inválida ("${qtyText}").`);
+          continue;
+        }
+
+        if (!pedidos[id]) pedidos[id] = {};
+        if (pedidos[id][code]) {
+          errores.push(`Línea ${i + 1}: código duplicado (${code}) en pedido ${id}.`);
+          continue;
+        }
+
+        pedidos[id][code] = {
+          nombre: name,
+          cantidad: qty,
+          escaneado: 0
+        };
+      }
+
+      actualizarSelectorPedidos();
+      renderErrores();
+    }
+
+    function actualizarSelectorPedidos() {
+      const selector = document.getElementById('pedidoSelect');
+      selector.innerHTML = '<option value="">-- Selecciona un pedido --</option>';
+      for (const id in pedidos) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `Pedido ${id}`;
+        selector.appendChild(option);
+      }
+      selector.addEventListener('change', function () {
+        pedidoActual = pedidos[this.value] || null;
+        renderTabla();
+        document.getElementById('barcodeInput').focus();
+      });
+    }
+
+    function renderErrores() {
+      const div = document.getElementById('errores');
+      if (errores.length === 0) {
+        div.textContent = '';
+        return;
+      }
+      div.innerHTML = '<strong>Errores en el archivo:</strong><ul>' + errores.map(e => `<li>${e}</li>`).join('') + '</ul>';
+    }
 
     document.getElementById('barcodeInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
@@ -102,6 +195,26 @@
         setTimeout(() => document.getElementById('barcodeInput').focus(), 100);
       }
     });
+
+    function renderTabla() {
+      const table = document.getElementById('pedidoTable');
+      table.innerHTML = '<tr><th>Código</th><th>Nombre</th><th>Cantidad</th><th>Escaneado</th></tr>';
+      if (!pedidoActual) return;
+
+      for (const code in pedidoActual) {
+        const p = pedidoActual[code];
+        const row = document.createElement('tr');
+        if (p.escaneado === p.cantidad) row.classList.add('completo');
+        if (p.escaneado > p.cantidad) row.classList.add('exceso');
+        row.innerHTML = `
+          <td>${code}</td>
+          <td>${p.nombre}</td>
+          <td>${p.cantidad}</td>
+          <td>${p.escaneado}</td>
+        `;
+        table.appendChild(row);
+      }
+    }
   </script>
 </body>
 </html>
